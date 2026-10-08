@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080d17">
+  <meta name="description" content="PapocaHash. Um laboratório local para observar, medir e comparar buscas por hash em Python e Rust.">
+  <title>PapocaHash · A precisão em cada tentativa</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="assets/style.css">
+  <script defer src="assets/tooltips.js"></script>
+  <script defer src="assets/stream.js"></script>
+  <script defer src="assets/showcase.js"></script>
+  <script defer src="assets/app.js"></script>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="#"><img src="assets/logo.svg" width="38" height="38" alt=""><span>Papoca<span class="brand-light">Hash</span><small>COMPUTATIONAL LABORATORY</small></span></a>
+    <nav aria-label="Seções"><a href="#algorithms">Algoritmos</a><a href="#observatory">Observatório</a></nav>
+    <button id="server-status" class="server-status" type="button" title="Verificar servidor local"><span class="status-dot"></span><span id="status-text">Verificando servidor</span><span class="status-port">:8765</span></button>
+  </header>
+  <main>
+    <section class="intro">
+      <div><div class="eyebrow"><span class="tiny-line"></span> ENGENHARIA VISÍVEL. DESEMPENHO REAL.</div><h1>Complexidade,<br><em>em movimento.</em></h1><p>Um milhão de possibilidades. Três motores.<br>A precisão de cada tentativa, diante dos seus olhos.</p></div>
+      <div class="intro-note"><span class="edition">01 / LOCAL EDITION</span><div class="orbit-emblem" aria-hidden="true"><i></i><i></i><i></i><b>PH</b></div><span>PYTHON × RUST<br>FEITO PARA MEDIR.</span></div>
+    </section>
+
+    <section class="prepare-panel" aria-labelledby="prepare-title">
+      <div class="prepare-heading"><span class="section-number">01</span><div><h2 id="prepare-title">O ponto de partida</h2><p>Prepare a palavra. A experiência começa aqui.</p></div><span class="tag neutral">WORDLIST / 1.000.000 <button class="info" data-tip="São candidatos sintéticos distintos, gerados localmente. A palavra escolhida substitui uma entrada sem aumentar a lista." aria-label="Sobre a wordlist">i</button></span></div>
+      <form id="prepare-form" class="prepare-form">
+        <div class="field master-field"><label for="master-word">Palavra mestra <button type="button" class="info" data-tip="Será inserida em uma posição aleatória entre 500.000 e 1.000.000. Os motores procuram pelo hash, sem consultar essa posição." aria-label="Sobre a palavra mestra">i</button></label><div class="input-wrap"><input id="master-word" name="word" type="text" autocomplete="off" placeholder="Escolha uma palavra para o experimento" maxlength="72" required><span class="input-symbol">↳</span></div></div>
+        <div class="field"><label for="hash-algorithm">Exibir hash</label><select id="hash-algorithm"><option value="md5">MD5</option><option value="sha512">SHA-512</option><option value="bcrypt">bcrypt</option><option value="argon2id">Argon2id</option></select></div>
+        <button id="prepare-button" class="button primary" type="submit">Preparar experimento <span>↗</span></button>
+      </form>
+      <div id="prepared-result" class="prepared-result" hidden><div class="hash-output"><span class="label">HASH GERADO</span><code id="generated-hash"></code><button id="copy-hash" class="text-button" type="button">Copiar</button></div><div class="insertion-message"><span class="check-mark">✓</span><span id="insertion-text"></span></div></div>
+      <p id="prepare-message" class="form-message" role="status">Inicie server.bat para conectar o laboratório.</p>
+    </section>
+
+    <section id="algorithms" class="algorithm-section" aria-labelledby="algorithms-title">
+      <div class="section-heading"><div><span class="section-number">02</span><h2 id="algorithms-title">Escolha sua fronteira</h2></div><p>Quatro hashes. Diferentes custos de descoberta.</p></div>
+      <div class="algorithm-grid">
+        <button class="algorithm-card md5" data-algorithm="md5" type="button"><div class="card-top"><span>01 / DIGEST</span><span class="card-arrow">↗</span></div><svg class="card-art" viewBox="0 0 220 140" aria-hidden="true"><g class="art-orbit" fill="none" stroke="currentColor"><ellipse cx="110" cy="70" rx="62" ry="24" transform="rotate(-35 110 70)"/><ellipse cx="110" cy="70" rx="62" ry="24" transform="rotate(35 110 70)"/><ellipse cx="110" cy="70" rx="62" ry="24" transform="rotate(90 110 70)"/><circle cx="110" cy="70" r="9"/><circle cx="110" cy="70" r="40" stroke-dasharray="2 7"/></g></svg><div class="card-title"><h3>MD5</h3><span>128 BIT</span></div><p>O instante entre uma<br>tentativa e a próxima.</p><div class="card-bottom"><span>BAIXO CUSTO</span><span class="cost-meter"><i></i><i></i><i></i><i></i></span></div></button>
+        <button class="algorithm-card sha512" data-algorithm="sha512" type="button"><div class="card-top"><span>02 / DIGEST</span><span class="card-arrow">↗</span></div><svg class="card-art" viewBox="0 0 220 140" aria-hidden="true"><g class="art-float" fill="none" stroke="currentColor"><path d="m110 12 58 32v63l-58 32-58-32V44Zm0 0v63m58-31-58 31-58-31m58 31v64"/><path d="m110 32 39 22v42l-39 22-39-22V54Zm0 0v43m39-21-39 21-39-21m39 21v43" opacity=".4"/><circle cx="110" cy="75" r="6" fill="currentColor" fill-opacity=".2"/></g></svg><div class="card-title"><h3>SHA-512</h3><span>512 BIT</span></div><p>Mais bits. A mesma<br>busca pela precisão.</p><div class="card-bottom"><span>BAIXO CUSTO</span><span class="cost-meter"><i></i><i></i><i></i><i></i></span></div></button>
+        <button class="algorithm-card bcrypt" data-algorithm="bcrypt" type="button"><div class="card-top"><span>03 / PASSWORD</span><span class="card-arrow">↗</span></div><svg class="card-art" viewBox="0 0 220 140" aria-hidden="true"><g class="art-float" fill="none" stroke="currentColor"><circle cx="91" cy="70" r="38"/><circle cx="129" cy="70" r="38"/><circle cx="91" cy="70" r="30" opacity=".35"/><circle cx="129" cy="70" r="30" opacity=".35"/><path d="M53 70H28m139 0h25M110 16v24m0 59v25" opacity=".4"/><path d="m110 57 12 13-12 13-12-13Z" fill="currentColor" fill-opacity=".1"/></g></svg><div class="card-title"><h3>bcrypt</h3><span>COST 04</span></div><p>O tempo como parte<br>da sua arquitetura.</p><div class="card-bottom"><span>CUSTO ADAPTATIVO</span><span class="cost-meter"><i></i><i></i><i></i><i></i></span></div></button>
+        <button class="algorithm-card argon2id" data-algorithm="argon2id" type="button"><div class="card-top"><span>04 / MEMORY HARD</span><span class="card-arrow">↗</span></div><svg class="card-art" viewBox="0 0 220 140" aria-hidden="true"><g class="art-orbit" fill="none" stroke="currentColor"><path d="m110 10 53 31 0 59-53 31-53-31V41Zm0 0v121M57 41l106 59M163 41 57 100M57 41h106M57 100h106M83 25v90m54-90v90M57 70h106"/><path d="m110 41 26 15v29l-26 15-26-15V56Z" fill="currentColor" fill-opacity=".06"/></g></svg><div class="card-title"><h3>Argon2id</h3><span>8 MiB</span></div><p>Memória e processamento.<br>Uma fronteira mais exigente.</p><div class="card-bottom"><span>MEMÓRIA INTENSIVA</span><span class="cost-meter"><i></i><i></i><i></i><i></i></span></div></button>
+      </div>
+      <div class="lab-note"><span class="note-dot"></span> Parâmetros didáticos. Cada tentativa é real. <button class="info" data-tip="bcrypt usa custo 4. Argon2id usa 8 MiB, duas passagens e uma lane por tentativa. Custos baixos favorecem experimentos; a duração depende do hardware." aria-label="Sobre parâmetros didáticos">i</button></div>
+    </section>
+
+    <section id="observatory" class="observatory" aria-labelledby="observatory-title">
+      <div class="section-heading"><div><span class="section-number">03</span><h2 id="observatory-title">Observatório de execução</h2></div><span id="execution-status" class="execution-status">AGUARDANDO EXPERIMENTO</span></div>
+      <div class="metric-grid">
+        <article class="metric"><span class="label">TEMPO DE BUSCA <button class="info" data-tip="Tempo medido pelo motor. A preparação dos trabalhadores é informada separadamente no resultado." aria-label="Sobre tempo de busca">i</button></span><strong id="metric-time">—<small>s</small></strong><span id="metric-engine" class="metric-foot">Nenhum motor em execução</span></article>
+        <article class="metric"><span class="label">TENTATIVAS / SEGUNDO <button class="info" data-tip="Candidatos verificados divididos pelo tempo de busca. Depende do hash, do motor e do número de trabalhadores." aria-label="Sobre velocidade">i</button></span><strong id="metric-rate">—</strong><span id="metric-attempts" class="metric-foot">0 candidatos testados</span></article>
+        <article class="metric"><span class="label">CPU DO TRABALHO <button class="info" data-tip="Uso agregado dos processos da busca, normalizado pela capacidade de todos os processadores lógicos. O servidor e outras aplicações são separados." aria-label="Sobre CPU">i</button></span><strong id="metric-cpu">—<small>%</small></strong><span id="metric-memory" class="metric-foot">Memória: aguardando medição</span></article>
+        <article class="metric"><span class="label">GPU DO SISTEMA <button class="info" data-tip="Telemetria global da GPU NVIDIA; inclui outras aplicações. Na opção GPU, o Hashcat calcula os hashes na placa. Na opção CPU, os motores Python e Rust usam o processador." aria-label="Sobre GPU">i</button></span><strong id="metric-gpu">—<small>%</small></strong><span id="gpu-name" class="metric-foot">Verificando disponibilidade</span></article>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-heading"><div><h3>A trajetória de cada tentativa</h3><p>Tempo decorrido × candidatos verificados</p></div><div class="chart-tools"><div id="chart-legend" class="chart-legend"><span class="legend-empty">MEDIÇÕES REAIS</span></div><div id="candidate-stream" class="candidate-stream" data-status="idle" aria-label="Amostras de candidatos da busca" hidden><div class="stream-heading"><span class="stream-light" aria-hidden="true"></span><span id="stream-status" class="stream-status">EM ESPERA</span><button class="info" type="button" data-tip="Seleção de candidatos reais do motor. A rajada visual não representa todas as tentativas nem mede a velocidade da busca. A palavra encontrada só é destacada após confirmação do motor." aria-label="Sobre a animação de candidatos">i</button></div><div class="stream-current" aria-hidden="true"><span id="stream-word" class="stream-word">—</span><span class="stream-cursor"></span></div><p id="stream-announcement" class="sr-only" role="status"></p></div></div></div>
+        <div class="chart-wrap"><canvas id="performance-chart" aria-label="Gráfico de tempo de busca por candidatos testados. Os resultados também aparecem na tabela abaixo." role="img"></canvas><div id="chart-empty" class="chart-empty"><span class="empty-cross">⌁</span><p>O próximo movimento é seu.</p><small>Prepare uma palavra e execute um dos motores.</small></div><div id="chart-tooltip" class="chart-tooltip" hidden></div></div>
+        <div class="chart-footer"><div class="progress-track"><span id="progress-fill"></span></div><span id="progress-text">0 / 1.000.000</span><span id="eta-text">Estimativa: —</span><button id="cancel-button" class="text-button danger" disabled type="button">Interromper <span>×</span></button></div>
+      </div>
+      <div id="result-banner" class="result-banner" hidden role="status"></div>
+      <div class="results-panel"><div class="results-heading"><h3>Comparação do experimento</h3><button id="export-results" class="text-button" type="button" disabled>Exportar JSON ↗</button></div><div class="table-scroll"><table><thead><tr><th>Hash / motor</th><th>Busca <button class="info" data-tip="Tempo de execução do motor; o tempo total também inclui preparo e encerramento." aria-label="Sobre duração">i</button></th><th>Velocidade</th><th>CPU média / pico</th><th>Memória pico</th><th>Estado</th></tr></thead><tbody id="results-body"><tr class="empty-row"><td colspan="6">As evidências aparecem aqui, uma execução por vez.</td></tr></tbody></table></div></div>
+    </section>
+    <section id="engineering" class="code-showcase" aria-labelledby="engineering-title">
+      <div class="section-heading"><div><span class="section-number">04</span><h2 id="engineering-title">A engenharia por trás da descoberta</h2></div><p>Três motores. Cada linha tem um propósito.</p></div>
+      <div class="code-grid">
+        <article class="code-card">
+          <div class="code-heading"><span class="code-index">01 / PYTHON</span><button class="text-button" type="button" data-copy-code="kernel-iterative">Copiar código ↗</button></div>
+          <h3>A precisão do laço.</h3><p>Percorre cada candidato do bloco e encerra ao encontrar uma correspondência. Um núcleo direto, distribuído entre processos para explorar a CPU.</p>
+          <div class="code-tags"><span>Iterativo</span><span>5 linhas de núcleo</span><span>O(n × H)</span><button class="info" type="button" data-tip="n é a quantidade de candidatos e H é o custo de verificar o hash. As cinco linhas excluem comentários. Este é o núcleo real; processos, medição e cancelamento ficam na camada de execução." aria-label="Sobre o código iterativo">i</button></div>
+          <div class="code-window"><div class="code-file"><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>backend/kernels.py</span><span>iterative</span></div><pre><code id="kernel-iterative">def iterative(words, check):
+    # Enumerar o bloco evita índice/decodificação no caminho crítico.
+    for index, word in enumerate(words):
+        if check(word):
+            return index
+    return None</code></pre></div>
+          <div class="code-foot"><span>Sequência simples. Saída imediata.</span><span>01</span></div>
+        </article>
+        <article class="code-card">
+          <div class="code-heading"><span class="code-index">02 / PYTHON</span><button class="text-button" type="button" data-copy-code="kernel-recursive">Copiar código ↗</button></div>
+          <h3>O equilíbrio da divisão.</h3><p>Divide o bloco em duas partes e visita os candidatos na mesma ordem. A divisão equilibrada mantém a profundidade da recursão pequena, mesmo em blocos grandes.</p>
+          <div class="code-tags"><span>Recursivo</span><span>9 linhas de núcleo</span><span>Pilha O(log b)</span><button class="info" type="button" data-tip="b é o tamanho do bloco; a pilha cresce de forma logarítmica pela divisão equilibrada. O trabalho continua O(n × H): todos os candidatos precisam ser verificados. As nove linhas excluem comentários e orquestração." aria-label="Sobre o código recursivo">i</button></div>
+          <div class="code-window"><div class="code-file"><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>backend/kernels.py</span><span>recursive</span></div><pre><code id="kernel-recursive">def recursive(words, check, lo=0, hi=None):
+    hi = len(words) if hi is None else hi
+    if lo &gt;= hi:
+        return None
+    if hi - lo == 1:
+        return lo if check(words[lo]) else None
+    # Divisão equilibrada: todos os candidatos, pilha O(log bloco).
+    mid = (lo + hi) // 2
+    found = recursive(words, check, lo, mid)
+    return found if found is not None else recursive(words, check, mid, hi)</code></pre></div>
+          <div class="code-foot"><span>Dividir o bloco. Preservar a ordem.</span><span>02</span></div>
+        </article>
+        <article class="code-card code-card-rust">
+          <div class="code-heading"><span class="code-index">03 / RUST</span><button class="text-button" type="button" data-copy-code="kernel-rust">Copiar código ↗</button></div>
+          <h3>A força das fatias.</h3><p>Percorre os bytes do bloco sem copiar cada palavra. O compilador especializa o verificador; ao redor deste núcleo, o pool Rayon distribui blocos entre as threads.</p>
+          <div class="code-tags"><span>Threads Rayon</span><span>3 linhas de núcleo</span><span>O(n × H)</span><button class="info" type="button" data-tip="Fatias são referências aos bytes já mapeados, evitando cópias por candidato. A monomorfização gera uma versão especializada da função para cada tipo de verificador. Este núcleo é sequencial dentro do bloco; o paralelismo entre blocos está em main.rs. As três linhas excluem comentários e orquestração." aria-label="Sobre o código Rust">i</button></div>
+          <div class="code-window"><div class="code-file"><span class="code-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>rust-engine/src/kernel.rs</span><span>find</span></div><pre><code id="kernel-rust">/// A closure monomorfizada permite ao compilador integrar o hash ao laço.
+pub fn find&lt;F: FnMut(&amp;[u8]) -&gt; bool&gt;(block: &amp;[u8], verify: F) -&gt; Option&lt;usize&gt; {
+    block.split(|&amp;byte| byte == b'\n').filter(|word| !word.is_empty()).position(verify)
+}</code></pre></div>
+          <div class="code-foot"><span>Bytes emprestados. Trabalho distribuído.</span><span>03</span></div>
+        </article>
+      </div>
+      <p class="code-caption">Os códigos acima são os núcleos reais dos motores Python e Rust. Paralelismo, arquivos mapeados, telemetria e interrupção trabalham ao redor deles.</p>
+    </section>
+  </main>
+  <footer><a class="footer-brand" href="#">PapocaHash<span> / </span>LAB</a><p>O desempenho deixa de ser uma hipótese.</p><span>LOCAL. MENSURÁVEL. SEU.</span></footer>
+
+  <dialog id="engine-dialog" aria-labelledby="dialog-title">
+    <form method="dialog"><button class="dialog-close" aria-label="Fechar">×</button></form>
+    <div class="eyebrow">CONFIGURAÇÃO DE EXECUÇÃO</div><h2 id="dialog-title">MD5<em> / selecione o motor</em></h2><p class="dialog-description">O mesmo alvo. Escolha onde executar.</p>
+    <div class="field"><label for="target-hash">Hash de destino <button class="info" data-tip="Você pode colar outro hash do algoritmo escolhido. A busca usa a wordlist deste experimento; a palavra pode não estar nela." aria-label="Sobre hash de destino">i</button></label><textarea id="target-hash" rows="3" spellcheck="false" placeholder="Prepare uma palavra para preencher este campo"></textarea></div>
+    <div class="device-choice"><div class="field"><label for="execution-device">Dispositivo <button class="info" data-tip="CPU usa os motores próprios Python/Rust. GPU usa Hashcat OpenCL, com os hashes calculados apenas na placa escolhida. A CPU ainda lê a lista e coordena a execução. Cada resultado identifica o motor e o dispositivo." aria-label="Sobre dispositivo de execução">i</button></label><select id="execution-device"><option value="cpu">CPU · Python / Rust</option><option value="gpu">GPU · Hashcat</option></select></div><p id="device-message" class="form-message" role="status"></p></div>
+    <fieldset class="engine-options"><legend>Motor de busca</legend><div id="engine-options"></div></fieldset>
+    <div class="dialog-controls"><div id="cpu-workers-field" class="field"><label for="worker-count">Trabalhadores <button class="info" data-tip="Processos no Python e threads no Rust. Por padrão, todos os processadores lógicos disponíveis. Mais trabalhadores não garantem ganho proporcional." aria-label="Sobre trabalhadores">i</button></label><input id="worker-count" type="number" min="1" value="1"></div><div id="gpu-device-field" class="field" hidden><label for="gpu-device">Placa de vídeo <button class="info" data-tip="Somente placas identificadas pelo backend GPU podem ser selecionadas. A escolha é enviada ao Hashcat; não há fallback automático para CPU." aria-label="Sobre a placa escolhida">i</button></label><select id="gpu-device"></select></div><div class="field"><label for="timeout-seconds">Timeout <button class="info" data-tip="Prazo máximo em segundos. Na CPU começa após o preparo dos trabalhadores; na GPU inclui a inicialização e compilação dos kernels. Deixe em branco para executar até encontrar, esgotar a lista ou interromper." aria-label="Sobre timeout">i</button></label><input id="timeout-seconds" type="number" min="0.1" max="604800" step="0.1" placeholder="Sem limite"></div></div>
+    <p id="dialog-message" class="form-message" role="status">Busca real em 1.000.000 de candidatos.</p>
+    <div class="dialog-actions"><button id="compare-button" class="button secondary" type="button">Comparar os três</button><button id="run-button" class="button primary" type="button">Executar motor <span>↗</span></button></div>
+  </dialog>
+  <div id="info-tooltip" class="info-tooltip" role="tooltip" popover="manual" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

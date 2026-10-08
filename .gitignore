@@ -1,0 +1,9 @@
+.runtime/
+.venv/
+target/
+data/
+__pycache__/
+.pytest_cache/
+node_modules/
+test-results/
+*.log

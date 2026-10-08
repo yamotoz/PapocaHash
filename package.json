@@ -1,0 +1,6 @@
+{
+  "name": "papocahash-ui-checks",
+  "private": true,
+  "scripts": { "test": "node --test tests/static.test.cjs tests/wordlist.test.cjs", "test:ui": "node tests/ui.cjs" },
+  "devDependencies": { "playwright": "1.62.0" }
+}

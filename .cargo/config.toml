@@ -1,0 +1,8 @@
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
+[target.x86_64-pc-windows-gnu]
+linker = "rust-lld"
+# Usa o RNG nativo compatível com as bibliotecas GNU incluídas no Rust.
+# Evita gerar imports raw-dylib, que exigiriam dlltool + assembler externos.
+rustflags = ["-C", "target-cpu=native", "-C", "link-self-contained=yes", "--cfg", 'getrandom_backend="windows_legacy"']
