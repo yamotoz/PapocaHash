@@ -13,6 +13,6 @@
 | Rust | Lavanda `#c4aedb` |
 | Tipografia | Segoe UI para controles; Georgia para títulos. Fontes do sistema, sem downloads |
 
-O monograma **PH** usa traços geométricos e três fragmentos. Os quatro cards traduzem os algoritmos em formas: órbitas para MD5, prisma para SHA-512, anéis para bcrypt e estrutura de memória para Argon2id.
+O emblema inicial forma um cadeado e um símbolo `#` com partículas em canvas. O cursor distorce o enxame; as partículas voltam à forma original ao sair. Os quatro cards traduzem os algoritmos em formas: órbitas para MD5, prisma para SHA-512, anéis para bcrypt e estrutura de memória para Argon2id.
 
-Logo e favicon são SVG próprios. Movimentos lentos e pequenas transições acompanham a leitura; `prefers-reduced-motion` desativa as animações. As cores dos motores permanecem consistentes nos gráficos e legendas.
+Logo e favicon são SVG próprios. Movimentos lentos e pequenas transições acompanham a leitura; `prefers-reduced-motion` deixa o emblema estático e desativa as animações. As cores dos motores permanecem consistentes nos gráficos e legendas.

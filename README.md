@@ -10,10 +10,10 @@ Um laboratório local para preparar uma palavra, gerar quatro hashes e observar 
 
 ## Comece por aqui
 
-1. Clique em **`server.bat`**. O primeiro preparo precisa de internet: instala Python em ambiente local, obtém dependências e compila o Rust otimizado. O toolchain Rust GNU deve estar instalado; ele já foi identificado neste computador.
+1. Clique em **`server.bat`**. O primeiro preparo precisa de internet: instala Python em ambiente local, obtém dependências, compila o Rust otimizado e prepara o Hashcat quando detecta uma GPU compatível. O toolchain Rust GNU deve estar instalado; ele já foi identificado neste computador.
 2. Abra **`index.html`** com dois cliques. Também é possível acessar `http://127.0.0.1:8765`.
 3. Aguarde o balão **Servidor online**, digite a palavra mestra e clique em **Preparar experimento**.
-4. Abra um card, selecione o motor e execute. **Comparar os três** executa um motor após o outro, evitando competição entre os testes.
+4. Abra um card e use o alternador **CPU / GPU**. Na CPU, escolha um motor e execute, ou clique em **Rankear**: o primeiro motor inicia, e **Próximo** libera cada um dos outros dois quando o anterior terminar. Na GPU, a busca usa Hashcat OpenCL. Tudo é iniciado pelo mesmo `server.bat`.
 
 Mantenha a janela do servidor aberta. `Ctrl+C` encerra o serviço e solicita a parada das buscas. A interface se reconecta automaticamente; após reiniciar o servidor, prepare um novo experimento.
 
@@ -100,17 +100,17 @@ A busca faz **O(n × H)** de trabalho: `n` candidatos e custo `H` por verificaç
 | Estimativa | Tempo aproximado para esgotar os candidatos restantes, atualizado pela velocidade observada |
 | CPU | Processos da busca, normalizados pela capacidade de todos os processadores lógicos |
 | Memória | Soma dos RSS dos processos; páginas compartilhadas podem aparecer em mais de um RSS |
-| GPU | Telemetria global via `nvidia-smi`; inclui outras aplicações. A busca executa na CPU |
+| GPU | Telemetria global via `nvidia-smi`; inclui outras aplicações. Ao selecionar GPU, a busca usa Hashcat OpenCL na placa escolhida |
 | Timeout | Prazo de busca; não prova ausência da palavra na lista |
 | Latência de parada | Tempo entre solicitar interrupção e recolher o trabalho |
 
 O gráfico usa candidatos no eixo horizontal e tempo no vertical. As amostras vêm do motor; animações afetam o desenho. Buscas muito rápidas podem ter só os pontos inicial e final. Uma medição de CPU sem amostras suficientes aparece indisponível na tabela.
 
-O indicador compacto **Busca em curso**, no canto do gráfico, exibe uma seleção real de candidatos processados pelos trabalhadores. As palavras trocam em rajadas a cada 24 ms enquanto há amostras disponíveis; a palavra confirmada se estabiliza em verde. Até 16 trabalhadores fornecem amostras por atualização; não é uma transmissão de todas as tentativas. Detalhes ficam no “i”. O desenho do gráfico interpola a partir do estado atual entre atualizações, preservando as amostras reais nos detalhes e na exportação. Tempos na interface usam **uma casa decimal em segundos**; o JSON mantém a precisão completa.
+O indicador **Busca em curso** exibe uma seleção real de candidatos processados pelos trabalhadores e seus hashes. Durante o ranking, ele aparece no painel **Comparação dos três motores** com uma trilha curta das amostras recentes; nas buscas individuais, fica compacto no canto do gráfico. O servidor mantém as últimas 96 amostras em ordem, e a interface as reproduz no ritmo da tela. O fluxo visual não representa todas as tentativas nem mede a velocidade da busca. A palavra confirmada se estabiliza em verde. Na GPU, o Hashcat não envia amostras individuais, então a interface exibe o hash alvo. Detalhes ficam no “i”. O desenho do gráfico interpola a partir do estado atual entre atualizações, preservando as amostras reais nos detalhes e na exportação. Tempos na interface usam **uma casa decimal em segundos**; o ranking usa três casas para distinguir buscas rápidas. O JSON mantém a precisão completa.
 
 A vitrine **A engenharia por trás da descoberta** apresenta os dois núcleos Python e o núcleo Rust reais, com resumos, realce de sintaxe e cópia do código. O resumo Rust distingue a busca por fatias dentro do bloco do paralelismo Rayon entre blocos. A entrada dos cards acompanha a rolagem. Animações respeitam a preferência de movimento reduzido do navegador.
 
-Comparações de uma execução não substituem benchmarks repetidos. A ordem dos blocos concorrentes e a temperatura do computador podem alterar tempos e tentativas. Os resultados do experimento permanecem no overview; **Exportar JSON** salva amostras, parâmetros e métricas. O servidor também grava resultados em `data/results/`.
+**Rankear** usa o mesmo hash, algoritmo, lista e número de trabalhadores nos três motores CPU. Envia somente o primeiro trabalho; após cada conclusão, o botão **Próximo** envia o seguinte. O painel mostra tempo, tentativas, velocidade e diferença percentual em relação ao mais rápido. Como a busca encerra ao encontrar o alvo, os motores podem testar quantidades diferentes de candidatos; compare também as velocidades. Uma única rodada não substitui benchmarks repetidos. Temperatura e ordem dos blocos podem alterar os resultados. **Exportar JSON** salva amostras, parâmetros e métricas; o servidor também grava resultados em `data/results/`.
 
 ## Testes e benchmarks
 
@@ -186,7 +186,7 @@ API: `GET /api/health`, `GET /api/catalog`, `POST /api/experiments`, `POST /api/
 - **Rust não encontrado:** instale o toolchain `stable-x86_64-pc-windows-gnu` pelo rustup.
 - **`dlltool.exe` não encontrado:** a configuração GNU usa agora o backend oficial `windows_legacy` de `getrandom`, com o gerador nativo do Windows via `advapi32`. Isso evita gerar imports que exigem `dlltool` e um assembler externo. Execute `server.bat` novamente; não é necessário instalar MinGW adicional. [Documentação de getrandom](https://docs.rs/getrandom/0.3.4/getrandom/).
 - **Porta 8765 ocupada:** encerre a outra instância do PapocaHash ou o serviço que esteja usando essa porta.
-- **GPU indisponível:** as buscas continuam pela CPU; a UI informa a ausência da telemetria.
+- **GPU indisponível:** as buscas continuam pela CPU; o alternador mostra o motivo. Confira o driver OpenCL e reinicie `server.bat` para tentar o preparo novamente.
 - **Novo computador:** recompile o Rust, pois `target-cpu=native` usa os recursos do processador da máquina de compilação.
 
 A identidade visual está descrita em [BRAND.md](BRAND.md). Logo, favicon e artes dos cards são vetores próprios, criados diretamente no projeto.

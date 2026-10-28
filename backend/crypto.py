@@ -63,3 +63,18 @@ def verifier(algorithm: str, target: str):
     salt, digest = parsed
     raw_hash = hash_secret_raw
     return lambda word: raw_hash(word, salt, 2, 8192, 1, 32, Type.ID) == digest
+
+
+def preview_hash(algorithm: str, target: str, word: str) -> str:
+    """Hash de uma amostra com os mesmos parâmetros e salt do alvo."""
+    raw = word.encode("utf-8")
+    if algorithm == "md5":
+        return hashlib.md5(raw, usedforsecurity=False).hexdigest()
+    if algorithm == "sha512":
+        return hashlib.sha512(raw).hexdigest()
+    if algorithm == "bcrypt":
+        return bcrypt.hashpw(raw, target.encode()).decode()
+    salt, _ = parse_target(algorithm, target)
+    digest = hash_secret_raw(raw, salt, 2, 8192, 1, 32, Type.ID)
+    encoded = base64.b64encode(digest).decode().rstrip("=")
+    return target.rsplit("$", 1)[0] + "$" + encoded

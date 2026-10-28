@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 import uvicorn
 
 from .catalog import catalog
-from .crypto import ALGORITHMS, hashes, parse_target
+from .crypto import ALGORITHMS, hashes, parse_target, preview_hash
 from .dataset import ROOT, ensure_base, prepare
 from .metrics import GPU, Resources
 from .python_engine import PythonEngine
@@ -66,11 +66,38 @@ class Laboratory:
         preview = None
         try:
             preview = CandidatePreview(dataset)
-            def on_candidates(positions):
-                candidates = preview.read(positions)
-                with job.lock:
-                    job.state["preview_candidates"] = candidates
             algorithm, target, engine = (job.payload[key] for key in ("algorithm", "target", "engine"))
+            preview_offset = 0
+            hash_cache = {}
+            preview_samples = []
+            preview_seq = 0
+            last_positions = {}
+            def on_candidates(positions):
+                nonlocal preview_offset, hash_cache, preview_samples, preview_seq
+                candidates = preview.read(positions)
+                if algorithm in ("bcrypt", "argon2id") and len(candidates) > 4:
+                    count = len(candidates)
+                    candidates = [candidates[(preview_offset + index) % count] for index in range(4)]
+                    preview_offset = (preview_offset + 4) % count
+                fresh = []
+                for candidate in candidates:
+                    position = candidate["position"]
+                    worker = candidate["worker"]
+                    if last_positions.get(worker) == position:
+                        continue
+                    last_positions[worker] = position
+                    candidate["hash"] = hash_cache.get(position) or preview_hash(algorithm, target, candidate["word"])
+                    hash_cache[position] = candidate["hash"]
+                    preview_seq += 1
+                    candidate["seq"] = preview_seq
+                    fresh.append(candidate)
+                if len(hash_cache) > 128:
+                    hash_cache = {candidate["position"]: candidate["hash"] for candidate in fresh}
+                if not fresh:
+                    return
+                preview_samples = (preview_samples + fresh)[-96:]
+                with job.lock:
+                    job.state["preview_candidates"] = preview_samples
             workers, block = job.payload["workers"], job.payload["block_size"]
             timeout = job.payload["timeout"]
             if engine == "gpu-hashcat":

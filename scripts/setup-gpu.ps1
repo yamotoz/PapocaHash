@@ -1,3 +1,4 @@
+param([switch]$Auto)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
@@ -5,6 +6,27 @@ $runtimeRoot = Join-Path $projectRoot '.runtime'
 New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
 $archivePath = Join-Path $runtimeRoot 'hashcat-7.1.2.7z'
 $binaryPath = Join-Path $runtimeRoot 'hashcat-7.1.2/hashcat.exe'
+if ($Auto) {
+    $gpuDetected = $false
+    try {
+        if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+            $gpuDetected = @(& nvidia-smi -L 2>$null).Count -gt 0 -and $LASTEXITCODE -eq 0
+        }
+    } catch { }
+    if (!$gpuDetected) {
+        try {
+            $gpuDetected = @(Get-CimInstance Win32_VideoController -ErrorAction Stop | Where-Object { $_.Name -match 'NVIDIA|Radeon|AMD|Intel Arc' }).Count -gt 0
+        } catch { }
+    }
+    if (!$gpuDetected) {
+        Write-Host 'GPU compativel nao detectada; iniciando apenas os motores CPU.' -ForegroundColor DarkGray
+        return
+    }
+    if ((Test-Path -LiteralPath $binaryPath) -and (Test-Path -LiteralPath (Join-Path $runtimeRoot 'gpu-validation.json'))) {
+        Write-Host 'Hashcat ja preparado e validado. GPU pronta para o servidor.' -ForegroundColor Green
+        return
+    }
+}
 if (!(Test-Path -LiteralPath $binaryPath)) {
     if (!(Test-Path -LiteralPath $archivePath) -or (Get-Item -LiteralPath $archivePath).Length -eq 0) {
         Write-Host 'Obtendo Hashcat 7.1.2 do site oficial...' -ForegroundColor Cyan

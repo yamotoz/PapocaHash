@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import dataset
-from backend.crypto import hashes, parse_target, verifier
+from backend.crypto import hashes, parse_target, preview_hash, verifier
 from backend.kernels import iterative, recursive
 from backend.python_engine import PythonEngine
 from backend.preview import CandidatePreview
@@ -19,6 +19,13 @@ from backend import server
 
 ENGINES = ("python-iterative", "python-recursive", "rust")
 ALGORITHMS = ("md5", "sha512", "bcrypt", "argon2id")
+
+
+@pytest.mark.parametrize("algorithm", ALGORITHMS)
+def test_preview_hash_uses_target_parameters(algorithm):
+    target = hashes("ação🔷")[algorithm]
+    assert preview_hash(algorithm, target, "ação🔷") == target
+    assert preview_hash(algorithm, target, "outro candidato") != target
 
 
 @pytest.mark.parametrize("engine", ENGINES)
@@ -67,7 +74,45 @@ def test_api_jobs_deliver_samples_for_all_engines(tmp_path, monkeypatch):
             assert result["status"] == "found"
             assert result["word"] == "ação🔷"
             assert result["preview_candidates"]
-            assert all(sample["word"] == words[sample["position"] - 1] for sample in result["preview_candidates"])
+            sequences = [sample["seq"] for sample in result["preview_candidates"]]
+            assert 1 <= len(sequences) <= 96
+            assert sequences == sorted(set(sequences))
+            assert all(sample["word"] == words[sample["position"] - 1] and
+                       sample["hash"] == hashlib.md5(sample["word"].encode(), usedforsecurity=False).hexdigest()
+                       for sample in result["preview_candidates"])
+
+
+def test_api_keeps_recent_candidate_history_in_order(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "ROOT", tmp_path)
+    fake_binary = tmp_path / "fake-rust.exe"
+    fake_binary.touch()
+    monkeypatch.setattr(server.rust_engine, "EXECUTABLE", fake_binary)
+
+    def fake_run(*args):
+        on_candidates = args[-1]
+        for position in range(1, 141):
+            on_candidates([position])
+        return {"status": "exhausted", "attempts": 140, "elapsed": .1}
+
+    monkeypatch.setattr(server.rust_engine, "run", fake_run)
+    with TestClient(app) as client:
+        snapshot = dataset.prepare("seed", 150, 150)
+        app.state.lab.experiments[snapshot["id"]] = {"dataset": snapshot}
+        target = hashes("absent")["md5"]
+        response = client.post("/api/jobs", json={"experiment_id": snapshot["id"], "algorithm": "md5", "engine": "rust", "target": target, "workers": 1})
+        assert response.status_code == 200
+        job_id, deadline = response.json()["id"], time.monotonic() + 10
+        while True:
+            result = client.get(f"/api/jobs/{job_id}").json()
+            if result["status"] in ("exhausted", "error") or time.monotonic() >= deadline:
+                break
+            time.sleep(.02)
+        assert result["status"] == "exhausted"
+        samples = result["preview_candidates"]
+        assert len(samples) == 96
+        assert [sample["seq"] for sample in samples] == list(range(45, 141))
+        assert [sample["position"] for sample in samples] == list(range(45, 141))
+        assert all(sample["hash"] == hashlib.md5(sample["word"].encode(), usedforsecurity=False).hexdigest() for sample in samples)
 
 
 @pytest.fixture(autouse=True)

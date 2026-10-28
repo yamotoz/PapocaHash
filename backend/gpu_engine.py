@@ -13,7 +13,7 @@ from .crypto import verifier
 from .dataset import ROOT
 
 MODES = {"md5": 0, "sha512": 1700, "bcrypt": 3200, "argon2id": 34000}
-GPU_FLAGS = ["--backend-ignore-cuda", "--backend-ignore-hip", "--backend-ignore-metal", "-D", "2"]
+GPU_FLAGS = ["--backend-ignore-cuda", "--backend-ignore-hip", "-D", "2"]
 HIDDEN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -34,7 +34,7 @@ def parse_devices(output):
 def discover():
     binary = executable()
     if not binary:
-        return {"available": False, "reason": "Execute setup-gpu.bat para preparar o motor GPU.", "devices": []}
+        return {"available": False, "reason": "Inicie server.bat para preparar o motor GPU.", "devices": []}
     try:
         version = subprocess.check_output([str(binary), "--version"], cwd=binary.parent,
                                           text=True, timeout=10, creationflags=HIDDEN).strip()
@@ -45,7 +45,7 @@ def discover():
                                 capture_output=True, text=True, errors="replace", timeout=20, creationflags=HIDDEN)
         devices = parse_devices(result.stdout)
         if result.returncode or not devices:
-            raise RuntimeError("Hashcat não detectou GPU OpenCL. Verifique o driver da placa e execute setup-gpu.bat novamente.")
+            raise RuntimeError("Hashcat não detectou GPU OpenCL. Verifique o driver da placa e reinicie server.bat.")
         return {"available": True, "reason": "", "version": version, "devices": devices, "backend": "OpenCL"}
     except (OSError, subprocess.SubprocessError, RuntimeError) as error:
         return {"available": False, "reason": str(error), "devices": []}
@@ -75,7 +75,7 @@ def command(binary, directory, dataset, algorithm, device_id):
 def run(dataset, algorithm, target, device_id, update, cancelled, timeout=None):
     binary = executable()
     if not binary:
-        raise RuntimeError("Motor GPU ausente. Execute setup-gpu.bat.")
+        raise RuntimeError("Motor GPU ausente. Inicie server.bat.")
     directory = ROOT / ".runtime" / "gpu-runs" / uuid.uuid4().hex
     directory.mkdir(parents=True)
     (directory / "target.txt").write_text(target + "\n", encoding="utf-8")

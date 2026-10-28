@@ -13,11 +13,15 @@
     argon2id: 'Argon2id combina memória e processamento: 8 MiB, duas passagens e uma lane por tentativa neste laboratório.'
   };
   const terminal = new Set(['found', 'exhausted', 'cancelled', 'timeout', 'error']);
+  const rankEngines = ['python-iterative', 'python-recursive', 'rust'];
   const statusNames = { queued: 'NA FILA', preparing: 'PREPARANDO MOTOR', running: 'EM EXECUÇÃO', found: 'PALAVRA ENCONTRADA', exhausted: 'LISTA ESGOTADA', cancelled: 'INTERROMPIDA', timeout: 'TEMPO LIMITE', error: 'ERRO DE EXECUÇÃO' };
-  const state = { online: false, experiment: null, health: null, algorithm: 'md5', jobs: new Map(), active: [], current: null, busy: false, preparing: false, toastTimer: null, polling: false };
+  const state = { online: false, experiment: null, health: null, algorithm: 'md5', jobs: new Map(), active: [], current: null, rank: null, busy: false, preparing: false, toastTimer: null, polling: false };
   const number = value => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(value || 0);
   const decimal = (value, digits = 2) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(value || 0);
   const seconds = value => `${decimal(value, 1)} s`;
+  const rankSeconds = value => `${decimal(value, 3)} s`;
+  const device = () => document.querySelector('input[name="execution-device"]:checked')?.value || 'cpu';
+  const visibleJobs = () => state.rank ? state.rank.jobIds.map(id => state.jobs.get(id)).filter(Boolean) : [...state.jobs.values()];
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const stream = new CandidateStream();
 
@@ -36,11 +40,14 @@
   }
   function message(element, text, error = false) { element.textContent = text; element.classList.toggle('error', error); }
   function controls() {
-    const gpu = $('execution-device').value === 'gpu';
-    $('prepare-button').disabled = !state.online || state.busy || state.preparing;
-    $('run-button').disabled = !state.online || !state.experiment || state.busy || (gpu && !state.health?.gpu_engine?.available);
-    $('compare-button').disabled = !state.online || !state.experiment || state.busy || !state.health?.engines.every(engine => engine.available);
-    $('compare-button').hidden = gpu;
+    const gpu = device() === 'gpu';
+    const rankPending = state.rank && !state.rank.done;
+    $('prepare-button').disabled = !state.online || state.busy || state.preparing || rankPending;
+    $('run-button').disabled = !state.online || !state.experiment || state.busy || rankPending || (gpu && !state.health?.gpu_engine?.available);
+    $('rank-button').disabled = !state.online || !state.experiment || state.busy || rankPending || !state.health?.engines.every(engine => engine.available);
+    $('rank-button').hidden = gpu;
+    $('rank-next').disabled = !state.online || state.busy;
+    $('rank-exit').disabled = state.busy;
     $('cancel-button').disabled = !state.busy || !state.online;
   }
   async function health() {
@@ -48,8 +55,9 @@
       const data = await request('/health', { signal: AbortSignal.timeout(2500) });
       if (data.service !== 'PapocaHash') throw new Error('Outro serviço está usando a porta 8765.');
       if (state.health?.instance_id && data.instance_id !== state.health.instance_id) {
-        state.experiment = null; state.busy = false; state.active = [];
+        state.experiment = null; state.busy = false; state.active = []; state.rank = null;
         stream.reset();
+        renderRank();
         $('prepared-result').hidden = true;
         toast('O servidor reiniciou. Prepare sua palavra novamente.');
       }
@@ -83,8 +91,9 @@
     $('generated-hash').textContent = state.experiment.targets[$('hash-algorithm').value];
   }
   function renderEngines() {
-    const gpu = $('execution-device').value === 'gpu';
+    const gpu = device() === 'gpu';
     const capability = state.health?.gpu_engine;
+    $('gpu-availability').textContent = capability?.available ? 'Pronta' : capability ? 'Indisponível' : 'Verificando';
     $('cpu-workers-field').hidden = gpu;
     $('gpu-device-field').hidden = !gpu;
     $('worker-count').disabled = gpu;
@@ -92,7 +101,7 @@
     const selectedGpu = $('gpu-device').value;
     $('gpu-device').replaceChildren(...(capability?.devices || []).map(device => Object.assign(document.createElement('option'), { value: String(device.id), textContent: device.name })));
     if ([...$('gpu-device').options].some(option => option.value === selectedGpu)) $('gpu-device').value = selectedGpu;
-    $('device-message').textContent = gpu ? capability?.available ? 'Hashes na GPU. A CPU coordena a execução.' : capability?.reason || 'Execute setup-gpu.bat e reinicie o servidor para preparar a GPU.' : 'Todos os processadores disponíveis por padrão.';
+    $('device-message').textContent = gpu ? capability?.available ? 'Hashes na GPU. A CPU coordena a execução.' : capability?.reason || 'Inicie server.bat para preparar a GPU.' : 'Todos os processadores disponíveis por padrão.';
     const fallback = [
       { id: 'python-iterative', name: 'Python iterativo', strategy: 'Laço · multiprocessos', lines: null, available: false },
       { id: 'python-recursive', name: 'Python recursivo', strategy: 'Recursão · multiprocessos', lines: null, available: false },
@@ -119,7 +128,7 @@
       container.append(label);
     }
   }
-  $('execution-device').addEventListener('change', () => { renderEngines(); controls(); });
+  document.querySelectorAll('input[name="execution-device"]').forEach(input => input.addEventListener('change', () => { renderEngines(); controls(); }));
   $('prepare-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (state.preparing || state.busy) return;
@@ -138,7 +147,9 @@
       state.jobs.clear();
       state.active = [];
       state.current = null;
+      state.rank = null;
       stream.reset();
+      renderRank();
       displayHash();
       $('prepared-result').hidden = false;
       $('insertion-text').textContent = `Palavra adicionada à wordlist1kk na posição ${number(experiment.position)}. Exatamente 1.000.000 de entradas distintas.`;
@@ -161,12 +172,20 @@
     catch { const range = document.createRange(); range.selectNodeContents($('generated-hash')); getSelection().removeAllRanges(); getSelection().addRange(range); toast('Hash selecionado. Use Ctrl+C para copiar.'); }
   });
   $('server-status').addEventListener('click', health);
+  const complexities = {
+    md5: 'O(n × L)', sha512: 'O(n × L)',
+    bcrypt: 'O(n × 2^c)', argon2id: 'O(n × m × t)'
+  };
   document.querySelectorAll('.algorithm-card').forEach(card => {
+    const complexity = Object.assign(document.createElement('span'), {
+      className: 'card-complexity', textContent: `BIG O · ${complexities[card.dataset.algorithm]}`
+    });
+    card.querySelector('.card-bottom').before(complexity);
     const detail = Object.assign(document.createElement('span'), { className: 'info', textContent: 'i' });
     detail.dataset.tip = explanations[card.dataset.algorithm];
     detail.setAttribute('aria-hidden', 'true');
     card.querySelector('.card-title > span').append(document.createTextNode(' '), detail);
-    card.setAttribute('aria-label', `${names[card.dataset.algorithm]}. ${explanations[card.dataset.algorithm]} Abrir configuração.`);
+    card.setAttribute('aria-label', `${names[card.dataset.algorithm]}. Busca ${complexities[card.dataset.algorithm]}. ${explanations[card.dataset.algorithm]} Abrir configuração.`);
     card.addEventListener('click', () => {
     state.algorithm = card.dataset.algorithm;
     $('dialog-title').replaceChildren(document.createTextNode(names[state.algorithm]), Object.assign(document.createElement('em'), { textContent: ' / selecione o motor' }));
@@ -178,52 +197,124 @@
     $('engine-dialog').showModal();
     });
   });
+  document.querySelectorAll('.code-tags > span').forEach(tag => {
+    if (tag.textContent.startsWith('O(')) {
+      tag.textContent = `BIG O · ${tag.textContent}`;
+      tag.classList.add('big-o-tag');
+    }
+  });
+  const recursiveTags = document.querySelector('.code-card:nth-child(2) .code-tags');
+  recursiveTags.querySelector('.info').before(Object.assign(document.createElement('span'), {
+    className: 'big-o-tag', textContent: 'BIG O · O(n × H)'
+  }));
   $('engine-dialog').addEventListener('click', event => {
     const rect = $('engine-dialog').getBoundingClientRect();
     if (event.target === $('engine-dialog') && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) $('engine-dialog').close();
   });
-  async function start(compare = false) {
-    if (state.busy || !state.experiment || !state.online) return;
-    const device = $('execution-device').value;
-    const gpu = device === 'gpu';
+  function renderRank() {
+    const rank = state.rank;
+    $('rank-panel').hidden = !rank;
+    const destination = rank ? $('rank-stream-slot') : stream.home;
+    if (stream.root.parentElement !== destination) destination.append(stream.root);
+    stream.root.classList.toggle('ranked', !!rank);
+    if (!rank) return;
+    const jobs = rank.jobIds.map(id => state.jobs.get(id));
+    const comparable = jobs.filter(job => job && ['found', 'exhausted'].includes(job.status) && job.elapsed > 0).sort((a, b) => a.elapsed - b.elapsed);
+    const completed = rank.done && comparable.length === 3;
+    const best = completed ? comparable[0] : null;
+    $('rank-progress').textContent = `RANKING · ${rank.index + 1} / 3`;
+    $('rank-context').textContent = `${names[rank.payload.algorithm]} · ${rank.payload.workers} trabalhadores · mesmo hash de destino`;
+    $('rank-phase').textContent = rank.error ? 'FALHA AO INICIAR' : rank.launching ? 'INICIANDO MOTOR' : rank.done ? 'RANKING CONCLUÍDO' : rank.waiting ? 'AGUARDANDO PRÓXIMO' : 'MOTOR EM EXECUÇÃO';
+    const steps = $('rank-steps');
+    steps.replaceChildren();
+    rankEngines.forEach((engine, index) => {
+      const job = jobs[index];
+      const finished = job && terminal.has(job.status);
+      const valid = job && ['found', 'exhausted'].includes(job.status);
+      const card = Object.assign(document.createElement('article'), { className: 'rank-step' });
+      card.dataset.state = !job ? 'pending' : !finished ? 'running' : valid ? 'done' : 'error';
+      const top = Object.assign(document.createElement('div'), { className: 'rank-step-top' });
+      top.append(Object.assign(document.createElement('span'), { textContent: `0${index + 1} / MOTOR` }));
+      if (completed && valid) top.append(Object.assign(document.createElement('span'), { className: 'rank-step-place', textContent: `#${comparable.indexOf(job) + 1}` }));
+      const title = Object.assign(document.createElement('h4'), { textContent: engineNames[engine] });
+      const value = Object.assign(document.createElement('strong'), { className: 'rank-step-value', textContent: job?.elapsed ? rankSeconds(job.elapsed) : '—' });
+      const detail = Object.assign(document.createElement('span'), { className: 'rank-step-detail', textContent: !job ? 'Aguardando início manual' : `${number(job.attempts)} tentativas · ${number(job.rate || (job.elapsed ? job.attempts / job.elapsed : 0))}/s · ${statusNames[job.status] || job.status}` });
+      card.append(top, title, value, detail);
+      if (completed && valid) card.append(Object.assign(document.createElement('span'), { className: 'rank-step-delta', textContent: job === best ? 'REFERÊNCIA · MAIS RÁPIDO' : `+${decimal((job.elapsed / best.elapsed - 1) * 100, 1)}% de tempo` }));
+      steps.append(card);
+    });
+    $('rank-summary').textContent = rank.error || (completed ? `Mais rápido: ${engineNames[best.engine]} em ${rankSeconds(best.elapsed)}. ${engineNames[comparable.at(-1).engine]} levou ${decimal(comparable.at(-1).elapsed / best.elapsed, 2)}× esse tempo.` : rank.done ? 'Ranking encerrado com resultado parcial. Veja o estado de cada motor acima.' : rank.waiting ? `Etapa ${rank.index + 1} encerrada. Clique em Próximo para iniciar ${engineNames[rankEngines[rank.index + 1]]}.` : 'Os resultados aparecem aqui, um motor por vez.');
+    $('rank-next').hidden = !rank.waiting || rank.done;
+    $('rank-next').replaceChildren(document.createTextNode(`Próximo · ${engineNames[rankEngines[rank.index + 1]] || ''} `), Object.assign(document.createElement('span'), { textContent: '↗' }));
+    $('rank-exit').textContent = rank.done ? 'Fechar ranking' : 'Encerrar ranking';
+  }
+  async function start(rankMode = false) {
+    if (state.busy || !state.experiment || !state.online || (state.rank && !state.rank.done)) return;
+    const selectedDevice = device();
+    const gpu = selectedDevice === 'gpu';
     const workers = gpu ? 1 : Number($('worker-count').value);
     const gpuDevice = gpu ? Number($('gpu-device').value) : null;
     const timeout = $('timeout-seconds').value === '' ? null : Number($('timeout-seconds').value);
     const target = $('target-hash').value.trim();
     const selected = document.querySelector('input[name="engine"]:checked')?.value;
-    if (!target || !Number.isInteger(workers) || workers < 1 || workers > state.health.workers || (gpu && (!state.health.gpu_engine?.available || !gpuDevice)) || (timeout !== null && (!Number.isFinite(timeout) || timeout <= 0 || timeout > 604800)) || !selected) {
+    if (!target || !Number.isInteger(workers) || workers < 1 || workers > state.health.workers || (gpu && (!state.health.gpu_engine?.available || !gpuDevice)) || (timeout !== null && (!Number.isFinite(timeout) || timeout <= 0 || timeout > 604800)) || !selected || (rankMode && (gpu || !state.health.engines.every(engine => engine.available)))) {
       message($('dialog-message'), 'Confira o hash, o motor, os trabalhadores e o timeout.', true);
       return;
     }
+    const payload = { experiment_id: state.experiment.id, algorithm: state.algorithm, target, workers, timeout, device: selectedDevice, gpu_device_id: gpuDevice };
     state.busy = true;
     controls();
-    const engines = compare ? ['python-iterative', 'python-recursive', 'rust'] : [selected];
-    state.active = [];
     try {
-      for (const engine of engines) {
-        const job = await request('/jobs', { method: 'POST', body: JSON.stringify({ experiment_id: state.experiment.id, algorithm: state.algorithm, target, engine, workers, timeout, device, gpu_device_id: gpuDevice }) });
-        state.jobs.set(job.id, job);
-        state.active.push(job.id);
-      }
-      state.current = state.active[0];
-      stream.update(state.jobs.get(state.current), `${names[state.algorithm]} · ${engineNames[engines[0]]}`);
+      const engine = rankMode ? rankEngines[0] : selected;
+      const job = await request('/jobs', { method: 'POST', body: JSON.stringify({ ...payload, engine }) });
+      state.jobs.set(job.id, job);
+      state.active = [job.id]; state.current = job.id;
+      state.rank = rankMode ? { payload, index: 0, jobIds: [job.id], waiting: false, done: false, launching: false, error: '' } : null;
+      stream.update(job, `${names[state.algorithm]} · ${engineNames[engine]}`);
       $('engine-dialog').close();
       $('result-banner').hidden = true;
       $('observatory').scrollIntoView({ behavior: reduced ? 'instant' : 'smooth', block: 'start' });
+      renderRank();
+      renderTable();
       renderLegend();
       chart.animate();
       await poll();
     } catch (error) {
       message($('dialog-message'), error.message, true);
-      if (state.active.length) { toast('Parte da comparação entrou na fila. Acompanhe as execuções.'); poll(); }
-      else { state.busy = false; controls(); }
+      state.busy = false; controls();
     }
   }
   $('run-button').addEventListener('click', () => start());
-  $('compare-button').addEventListener('click', () => start(true));
+  $('rank-button').addEventListener('click', () => start(true));
+  $('rank-next').addEventListener('click', async () => {
+    const rank = state.rank;
+    if (!rank?.waiting || rank.done || state.busy || !state.online) return;
+    rank.waiting = false; rank.launching = true; rank.error = '';
+    state.busy = true; controls(); renderRank();
+    try {
+      const index = rank.index + 1;
+      const engine = rankEngines[index];
+      const job = await request('/jobs', { method: 'POST', body: JSON.stringify({ ...rank.payload, engine }) });
+      rank.index = index; rank.jobIds.push(job.id); rank.launching = false;
+      state.jobs.set(job.id, job);
+      state.active = [job.id]; state.current = job.id;
+      $('result-banner').hidden = true;
+      stream.update(job, `${names[job.algorithm]} · ${engineNames[engine]}`);
+      renderRank(); renderTable(); renderLegend(); chart.animate();
+      await poll();
+    } catch (error) {
+      rank.launching = false; rank.waiting = true; rank.error = `Não foi possível iniciar o próximo motor: ${error.message}`;
+      state.busy = false; renderRank(); controls();
+    }
+  });
+  $('rank-exit').addEventListener('click', () => {
+    if (state.busy) return;
+    state.rank = null;
+    renderRank(); renderTable(); renderLegend(); chart.animate(); controls();
+  });
   $('cancel-button').addEventListener('click', async () => {
     $('cancel-button').disabled = true;
-    try { await Promise.all(state.active.filter(id => !terminal.has(state.jobs.get(id)?.status)).map(id => request(`/jobs/${id}/cancel`, { method: 'POST', body: '{}' }))); toast('Interrupção solicitada para o motor atual e a fila.'); }
+    try { await Promise.all(state.active.filter(id => !terminal.has(state.jobs.get(id)?.status)).map(id => request(`/jobs/${id}/cancel`, { method: 'POST', body: '{}' }))); toast('Interrupção solicitada para o motor atual.'); }
     catch { toast('Não foi possível solicitar a interrupção. Verifique o servidor.'); }
   });
   async function poll() {
@@ -239,19 +330,26 @@
       if (current) { state.current = current.id; metrics(current); }
       chart.animate();
       renderTable();
+      if (state.rank) renderRank();
       if (jobs.every(job => terminal.has(job.status))) {
         state.busy = false;
-        finish(jobs);
+        if (state.rank) {
+          state.rank.waiting = state.rank.index < rankEngines.length - 1;
+          state.rank.done = !state.rank.waiting;
+          renderRank();
+          finish(state.rank.done ? visibleJobs() : jobs);
+        } else finish(jobs);
       }
     } catch (error) {
       if (error.status === 404) {
         stream.pause('O servidor reiniciou. Prepare um novo experimento.');
         state.busy = false; state.experiment = null; $('prepared-result').hidden = true;
+        state.rank = null; renderRank();
         $('execution-status').textContent = 'SERVIDOR REINICIADO';
         toast('A execução não existe mais no servidor. Prepare a palavra novamente.');
       } else { $('execution-status').textContent = 'CONEXÃO INTERROMPIDA · RECONECTANDO'; stream.pause(); }
     }
-    finally { state.polling = false; controls(); if (state.busy) setTimeout(poll, 250); }
+    finally { state.polling = false; controls(); if (state.busy) setTimeout(poll, 180); }
   }
   function metrics(job) {
     const elapsed = job.elapsed || 0, attempts = job.attempts || 0;
@@ -286,7 +384,7 @@
     renderTable();
   }
   function renderTable() {
-    const jobs = [...state.jobs.values()].filter(job => terminal.has(job.status));
+    const jobs = visibleJobs().filter(job => terminal.has(job.status));
     const body = $('results-body');
     body.replaceChildren();
     if (!jobs.length) { const row = body.insertRow(); row.className = 'empty-row'; const cell = row.insertCell(); cell.colSpan = 6; cell.textContent = 'As evidências aparecem aqui, uma execução por vez.'; }
@@ -303,7 +401,7 @@
   function renderLegend() {
     const legend = $('chart-legend');
     legend.replaceChildren();
-    const jobs = [...state.jobs.values()];
+    const jobs = visibleJobs();
     const seen = new Set();
     for (const job of jobs) {
       const key = `${job.algorithm}:${job.engine}`;
@@ -339,7 +437,7 @@
     animate() {
       if (this.frame) cancelAnimationFrame(this.frame);
       this.frame = null;
-      const targets = [...state.jobs.values()].filter(job => job.samples?.length > 1).map(job => ({
+      const targets = visibleJobs().filter(job => job.samples?.length > 1).map(job => ({
         ...job, samples: job.samples.filter(sample => Number.isFinite(sample.elapsed) && Number.isFinite(sample.attempts))
       }));
       if (!targets.length) { this.plotJobs = []; this.hover = null; this.scaleY = .001; this.draw(); return; }
